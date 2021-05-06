@@ -13,7 +13,7 @@ func main() {
 }
 
 func loop(db *gorm.DB) {
-	for {
+	for i := 1; i < 10; i++ {
 		exec(db)
 	}
 }
