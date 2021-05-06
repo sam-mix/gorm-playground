@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option go_package = "/;proto";
+
+message Person {
+  // @inject_tag: gorm:"primarykey;autoincrement:true"
+  uint64 id = 1;
+  string name = 2;
+  Dog dog =3;
+}
+
+message Dog {
+  message Ms {
+    repeated string ms = 1; 
+  }
+
+  // @inject_tag: gorm:"primarykey;autoincrement:true"
+  uint64 id = 1;
+  string name = 2;
+  Ms ms =3;
+}

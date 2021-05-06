@@ -1,0 +1,17 @@
+version: "3"
+services:
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 1qaz@wsx
+      MYSQL_DATABASE: x
+      MYSQL_USER: x
+      MYSQL_PASSWORD: 123123
+    command:
+      --max_connections=1000
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_general_ci
+      --default-authentication-plugin=mysql_native_password
+    ports:
+      - 23306:3306
