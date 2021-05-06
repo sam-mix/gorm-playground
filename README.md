@@ -16,14 +16,14 @@ make install_sql
 ```
 
 
-2. 修改 proto
+2. modify proto
 
-3. 生成 proto 文件
+3. generate proto file
 ```sh
  make sql 
 ```
 
-4. 运行测试
+4. run test
 ```
 make run
 ```
