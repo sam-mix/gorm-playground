@@ -3,6 +3,8 @@ package util
 import (
 	"context"
 	"fmt"
+	"playground/cases/model"
+	"playground/cases/tx-demos/mutex1/util"
 	"sync"
 	"time"
 
@@ -30,19 +32,16 @@ const (
 )
 
 type Scheduler struct {
-	Impl             *Implement
-	TaskDelegate     *asynctaskproto.TaskDelegate
+	TaskDelegate     *model.TaskDelegate
 	Mutex            sync.Mutex
-	Client           asynctaskapi.AsyncTaskDelegateServiceClient
 	DistributedMutex grpckitsync.Mutex
 	ConcurrentTask   uint32 // 当前并发任务数
 	TaskClearTime    uint64 // 上次清理调度状态时间
 	IsRunning        bool
 }
 
-func NewScheduler(impl *Implement, delegate *asynctaskproto.TaskDelegate) (*Scheduler, error) {
+func NewScheduler(delegate *model.TaskDelegate) (*Scheduler, error) {
 	s := &Scheduler{
-		Impl:             impl,
 		TaskDelegate:     delegate,
 		DistributedMutex: impl.Sync.NewMutex(fmt.Sprintf("/scheduler/%d", delegate.Type), DistributedMutexExpiration),
 	}
@@ -88,14 +87,14 @@ func (s *Scheduler) MainLoop() {
 			grpclog.Infof("scheduler %d noop", s.TaskDelegate.Type)
 		} else {
 			for _, t := range tasks {
-				go func(task *asynctaskproto.Task) {
+				go func(task *model.Task) {
 					_, _ = s.Schedule(task)
 					done <- true
 				}(t)
 			}
 		}
 
-		now := commonutil.UnixMilliNow()
+		now := util.UnixMilliNow()
 		min := now - uint64(TaskScheduleExpiration.Milliseconds())
 		if s.TaskClearTime < min {
 			// 清理过期的任务调度状态
@@ -129,7 +128,7 @@ func (s *Scheduler) GetClient() (asynctaskapi.AsyncTaskDelegateServiceClient, er
 	return s.Client, nil
 }
 
-func (s *Scheduler) Schedule(task *asynctaskproto.Task) (*asynctaskproto.Task, error) {
+func (s *Scheduler) Schedule(task *model.Task) (*model.Task, error) {
 	client, err := s.GetClient()
 	if err != nil {
 		return nil, err
@@ -158,9 +157,9 @@ func (s *Scheduler) Schedule(task *asynctaskproto.Task) (*asynctaskproto.Task, e
 		s.Mutex.Unlock()
 
 		task.IsBusy = false
-		if task.State != asynctaskproto.Task_STATE_COMPLETED && task.State != asynctaskproto.Task_STATE_CANCELED && task.State != asynctaskproto.Task_STATE_FAULTED {
+		if task.State != model.Task_STATE_COMPLETED && task.State != model.Task_STATE_CANCELED && task.State != model.Task_STATE_FAULTED {
 			if task.FailureCount >= s.TaskDelegate.TaskMaxFailureCount || task.ScheduleCount >= s.TaskDelegate.TaskMaxSchduleCount {
-				task.State = asynctaskproto.Task_STATE_FAULTED
+				task.State = model.Task_STATE_FAULTED
 			}
 		}
 
@@ -172,7 +171,7 @@ func (s *Scheduler) Schedule(task *asynctaskproto.Task) (*asynctaskproto.Task, e
 		)
 	}()
 
-	if task.State == asynctaskproto.Task_STATE_CREATED {
+	if task.State == model.Task_STATE_CREATED {
 		ctx, cancel := context.WithTimeout(ctx, TaskPrepareTimeout)
 		defer cancel()
 
@@ -186,10 +185,10 @@ func (s *Scheduler) Schedule(task *asynctaskproto.Task) (*asynctaskproto.Task, e
 			return nil, err
 		}
 
-		if processTaskResponse.TaskState != task.State && processTaskResponse.TaskState != asynctaskproto.Task_STATE_UNSPECIFIED {
+		if processTaskResponse.TaskState != task.State && processTaskResponse.TaskState != model.Task_STATE_UNSPECIFIED {
 			task.State = processTaskResponse.TaskState
 		} else {
-			task.State = asynctaskproto.Task_STATE_READY
+			task.State = model.Task_STATE_READY
 		}
 		if processTaskResponse.TaskData != nil {
 			taskData := processTaskResponse.TaskData
@@ -197,7 +196,7 @@ func (s *Scheduler) Schedule(task *asynctaskproto.Task) (*asynctaskproto.Task, e
 			_, _ = s.UpdateTaskData(taskData)
 		}
 
-	} else if task.State == asynctaskproto.Task_STATE_READY || task.State == asynctaskproto.Task_STATE_RUNNING {
+	} else if task.State == model.Task_STATE_READY || task.State == model.Task_STATE_RUNNING {
 		ctx, cancel := context.WithTimeout(ctx, TaskExecuteTimeout)
 		defer cancel()
 
@@ -218,7 +217,7 @@ func (s *Scheduler) Schedule(task *asynctaskproto.Task) (*asynctaskproto.Task, e
 			return nil, err
 		}
 
-		if executeTaskResponse.TaskState != task.State && executeTaskResponse.TaskState != asynctaskproto.Task_STATE_UNSPECIFIED {
+		if executeTaskResponse.TaskState != task.State && executeTaskResponse.TaskState != model.Task_STATE_UNSPECIFIED {
 			task.State = executeTaskResponse.TaskState
 		}
 		if executeTaskResponse.TaskData != nil {
@@ -231,7 +230,7 @@ func (s *Scheduler) Schedule(task *asynctaskproto.Task) (*asynctaskproto.Task, e
 	return task, nil
 }
 
-func (s *Scheduler) GetNextTasks() ([]*asynctaskproto.Task, error) {
+func (s *Scheduler) GetNextTasks() ([]*model.Task, error) {
 	err := s.DistributedMutex.Lock()
 	if err != nil {
 		return nil, err
@@ -244,16 +243,16 @@ func (s *Scheduler) GetNextTasks() ([]*asynctaskproto.Task, error) {
 		return nil, nil
 	}
 
-	var tasks []*asynctaskproto.Task
-	err = s.Impl.DB.Table(GetTaskTable()).Transaction(func(tx *gorm.DB) error {
+	var tasks []*model.Task
+	err = s.Impl.DB.Transaction(func(tx *gorm.DB) error {
 		now := commonutil.UnixMilliNow()
 		result := tx.Where(
 			fmt.Sprintf("type = ? AND state IN ? AND is_busy = false AND next_schedule_time < ? AND singleton_id not in (SELECT singleton_id FROM %s WHERE type = %d AND is_busy = true)", GetTaskTable(), s.TaskDelegate.Type),
 			s.TaskDelegate.Type,
 			[]int32{
-				int32(asynctaskproto.Task_STATE_CREATED),
-				int32(asynctaskproto.Task_STATE_READY),
-				int32(asynctaskproto.Task_STATE_RUNNING),
+				int32(model.Task_STATE_CREATED),
+				int32(model.Task_STATE_READY),
+				int32(model.Task_STATE_RUNNING),
 			},
 			now,
 		).Order("priority").Order("last_schedule_time").Limit(int(amount)).Find(&tasks)
@@ -282,8 +281,8 @@ func (s *Scheduler) GetNextTasks() ([]*asynctaskproto.Task, error) {
 	return tasks, nil
 }
 
-func (s *Scheduler) UpdateTask(task *asynctaskproto.Task) (*asynctaskproto.Task, error) {
-	handler := s.Impl.DB.Table(GetTaskTable())
+func (s *Scheduler) UpdateTask(task *model.Task) (*model.Task, error) {
+	handler := s.Impl.DB
 
 	result := handler.Save(task)
 	if result.Error != nil {
@@ -293,10 +292,10 @@ func (s *Scheduler) UpdateTask(task *asynctaskproto.Task) (*asynctaskproto.Task,
 	return task, nil
 }
 
-func (s *Scheduler) GetTaskData(taskId uint64) (*asynctaskproto.TaskData, error) {
-	handler := s.Impl.DB.Table(GetTaskDataTable())
+func (s *Scheduler) GetTaskData(taskId uint64) (*model.TaskData, error) {
+	handler := s.Impl.DB
 
-	taskData := &asynctaskproto.TaskData{}
+	taskData := &model.TaskData{}
 
 	result := handler.First(taskData, taskId)
 	if result.Error != nil {
@@ -306,8 +305,8 @@ func (s *Scheduler) GetTaskData(taskId uint64) (*asynctaskproto.TaskData, error)
 	return taskData, nil
 }
 
-func (s *Scheduler) UpdateTaskData(taskData *asynctaskproto.TaskData) (*asynctaskproto.TaskData, error) {
-	handler := s.Impl.DB.Table(GetTaskDataTable())
+func (s *Scheduler) UpdateTaskData(taskData *model.TaskData) (*model.TaskData, error) {
+	handler := s.Impl.DB
 
 	result := handler.Save(taskData)
 	if result.Error != nil {
