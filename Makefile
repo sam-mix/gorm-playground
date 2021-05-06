@@ -115,3 +115,8 @@ mutex1:
 	@echo ========================== v2 版本测试 ==========================
 	@cd cases/tx-demos/mutex1/v2 && go run main.go
 
+
+
+.PHONY:decimal001
+decimal001:
+	@cd playground/decimal/001 && go run main.go
