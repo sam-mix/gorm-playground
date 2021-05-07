@@ -120,3 +120,7 @@ mutex1:
 .PHONY:decimal001
 decimal001:
 	@cd playground/decimal/001 && go run main.go
+
+.PHONY:save
+save:
+	@cd cases/save && go run main.go

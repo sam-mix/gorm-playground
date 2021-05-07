@@ -1,317 +1,298 @@
 package util
 
-import (
-	"context"
-	"fmt"
-	"playground/cases/model"
-	"playground/cases/tx-demos/mutex1/util"
-	"sync"
-	"time"
+// const (
+// 	DistributedMutexExpiration = 10 * time.Second // 分布式锁超时时间
 
-	"code.guanmai.cn/back_end/grpckit"
+// 	SchedulerTickerInterval   = 5 * time.Second        // 调度器默认触发间隔
+// 	SchedulerMainLoopInterval = 100 * time.Millisecond // 调度器休眠时间间隔
 
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/metadata"
+// 	TaskPrepareTimeout     = 5 * time.Minute  // 任务PrepareTask调用超时时间
+// 	TaskExecuteTimeout     = 2 * time.Minute  // 任务ExecuteTask调用超时时间
+// 	TaskFailureInterval    = 2 * time.Second  // 任务失败内置调度间隔
+// 	TaskScheduleExpiration = 10 * time.Minute // 任务调度状态过期时间
+// )
 
-	"github.com/google/uuid"
+// type Scheduler struct {
+// 	TaskDelegate     *model.TaskDelegate
+// 	Mutex            sync.Mutex
+// 	DistributedMutex grpckitsync.Mutex
+// 	ConcurrentTask   uint32 // 当前并发任务数
+// 	TaskClearTime    uint64 // 上次清理调度状态时间
+// 	IsRunning        bool
+// }
 
-	grpckitsync "code.guanmai.cn/back_end/grpckit/sync"
-	"gorm.io/gorm"
-)
+// func NewScheduler(delegate *model.TaskDelegate) (*Scheduler, error) {
+// 	s := &Scheduler{
+// 		TaskDelegate:     delegate,
+// 		DistributedMutex: impl.Sync.NewMutex(fmt.Sprintf("/scheduler/%d", delegate.Type), DistributedMutexExpiration),
+// 	}
 
-const (
-	DistributedMutexExpiration = 10 * time.Second // 分布式锁超时时间
+// 	return s, nil
+// }
 
-	SchedulerTickerInterval   = 5 * time.Second        // 调度器默认触发间隔
-	SchedulerMainLoopInterval = 100 * time.Millisecond // 调度器休眠时间间隔
+// func (s *Scheduler) Start() {
+// 	s.Mutex.Lock()
+// 	defer s.Mutex.Unlock()
 
-	TaskPrepareTimeout     = 5 * time.Minute  // 任务PrepareTask调用超时时间
-	TaskExecuteTimeout     = 2 * time.Minute  // 任务ExecuteTask调用超时时间
-	TaskFailureInterval    = 2 * time.Second  // 任务失败内置调度间隔
-	TaskScheduleExpiration = 10 * time.Minute // 任务调度状态过期时间
-)
+// 	if !s.IsRunning {
+// 		s.IsRunning = true
+// 		grpclog.Infof("scheduler %d start %s", s.TaskDelegate.Type, s.TaskDelegate.Endpoint)
 
-type Scheduler struct {
-	TaskDelegate     *model.TaskDelegate
-	Mutex            sync.Mutex
-	DistributedMutex grpckitsync.Mutex
-	ConcurrentTask   uint32 // 当前并发任务数
-	TaskClearTime    uint64 // 上次清理调度状态时间
-	IsRunning        bool
-}
+// 		go func() {
+// 			s.MainLoop()
+// 		}()
+// 	}
+// }
 
-func NewScheduler(delegate *model.TaskDelegate) (*Scheduler, error) {
-	s := &Scheduler{
-		TaskDelegate:     delegate,
-		DistributedMutex: impl.Sync.NewMutex(fmt.Sprintf("/scheduler/%d", delegate.Type), DistributedMutexExpiration),
-	}
+// func (s *Scheduler) Stop() {
+// 	// TODO
+// }
 
-	return s, nil
-}
+// func (s *Scheduler) MainLoop() {
+// 	ticker := time.NewTicker(SchedulerTickerInterval)
+// 	done := make(chan bool, 128)
 
-func (s *Scheduler) Start() {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
+// 	for {
+// 		select {
+// 		case <-ticker.C:
+// 			//grpclog.Infof("scheduler %d ticker", s.TaskDelegate.Type)
+// 		case <-done:
+// 			//grpclog.Infof("scheduler %d done", s.TaskDelegate.Type)
+// 		}
 
-	if !s.IsRunning {
-		s.IsRunning = true
-		grpclog.Infof("scheduler %d start %s", s.TaskDelegate.Type, s.TaskDelegate.Endpoint)
+// 		tasks, err := s.GetNextTasks()
 
-		go func() {
-			s.MainLoop()
-		}()
-	}
-}
+// 		if err != nil {
+// 			grpclog.Infof("scheduler %d next tasks error: %s", s.TaskDelegate.Type, err)
+// 		} else if len(tasks) == 0 {
+// 			grpclog.Infof("scheduler %d noop", s.TaskDelegate.Type)
+// 		} else {
+// 			for _, t := range tasks {
+// 				go func(task *model.Task) {
+// 					_, _ = s.Schedule(task)
+// 					done <- true
+// 				}(t)
+// 			}
+// 		}
 
-func (s *Scheduler) Stop() {
-	// TODO
-}
+// 		now := util.UnixMilliNow()
+// 		min := now - uint64(TaskScheduleExpiration.Milliseconds())
+// 		if s.TaskClearTime < min {
+// 			// 清理过期的任务调度状态
+// 			sql := fmt.Sprintf("UPDATE %s set is_busy = false WHERE type = %d AND is_busy = true AND last_schedule_time < %d", GetTaskTable(), s.TaskDelegate.Type, min)
+// 			s.Impl.DB.Exec(sql)
+// 			s.TaskClearTime = now
+// 		}
 
-func (s *Scheduler) MainLoop() {
-	ticker := time.NewTicker(SchedulerTickerInterval)
-	done := make(chan bool, 128)
+// 		// Sleep下避免CPU爆炸
+// 		time.Sleep(SchedulerMainLoopInterval)
+// 	}
+// }
 
-	for {
-		select {
-		case <-ticker.C:
-			//grpclog.Infof("scheduler %d ticker", s.TaskDelegate.Type)
-		case <-done:
-			//grpclog.Infof("scheduler %d done", s.TaskDelegate.Type)
-		}
+// func (s *Scheduler) GetClient() (asynctaskapi.AsyncTaskDelegateServiceClient, error) {
+// 	if s.Client == nil {
+// 		s.Mutex.Lock()
+// 		defer s.Mutex.Unlock()
 
-		tasks, err := s.GetNextTasks()
+// 		if s.Client == nil {
+// 			conn, err := grpckit.Dial(
+// 				s.TaskDelegate.Endpoint,
+// 			)
+// 			if err != nil {
+// 				return nil, err
+// 			}
 
-		if err != nil {
-			grpclog.Infof("scheduler %d next tasks error: %s", s.TaskDelegate.Type, err)
-		} else if len(tasks) == 0 {
-			grpclog.Infof("scheduler %d noop", s.TaskDelegate.Type)
-		} else {
-			for _, t := range tasks {
-				go func(task *model.Task) {
-					_, _ = s.Schedule(task)
-					done <- true
-				}(t)
-			}
-		}
+// 			s.Client = asynctaskapi.NewAsyncTaskDelegateServiceClient(conn)
+// 			grpclog.Infof("scheduler %d connect %s", s.TaskDelegate.Type, s.TaskDelegate.Endpoint)
+// 		}
+// 	}
+// 	return s.Client, nil
+// }
 
-		now := util.UnixMilliNow()
-		min := now - uint64(TaskScheduleExpiration.Milliseconds())
-		if s.TaskClearTime < min {
-			// 清理过期的任务调度状态
-			sql := fmt.Sprintf("UPDATE %s set is_busy = false WHERE type = %d AND is_busy = true AND last_schedule_time < %d", GetTaskTable(), s.TaskDelegate.Type, min)
-			s.Impl.DB.Exec(sql)
-			s.TaskClearTime = now
-		}
+// func (s *Scheduler) Schedule(task *model.Task) (*model.Task, error) {
+// 	client, err := s.GetClient()
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-		// Sleep下避免CPU爆炸
-		time.Sleep(SchedulerMainLoopInterval)
-	}
-}
+// 	u, err := uuid.NewRandom()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	requestId := u.String()
 
-func (s *Scheduler) GetClient() (asynctaskapi.AsyncTaskDelegateServiceClient, error) {
-	if s.Client == nil {
-		s.Mutex.Lock()
-		defer s.Mutex.Unlock()
+// 	grpclog.Infof("scheduler %d task %d start request id %s", s.TaskDelegate.Type, task.TaskId, requestId)
 
-		if s.Client == nil {
-			conn, err := grpckit.Dial(
-				s.TaskDelegate.Endpoint,
-			)
-			if err != nil {
-				return nil, err
-			}
+// 	ctx := context.Background()
+// 	if task.UserInfo != nil {
+// 		creatorCtx, err := commonauth.NewOutgoingContext(task.UserInfo)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		ctx = metadata.AppendToOutgoingContext(creatorCtx, "x-request-id", requestId)
+// 	}
 
-			s.Client = asynctaskapi.NewAsyncTaskDelegateServiceClient(conn)
-			grpclog.Infof("scheduler %d connect %s", s.TaskDelegate.Type, s.TaskDelegate.Endpoint)
-		}
-	}
-	return s.Client, nil
-}
+// 	defer func() {
+// 		s.Mutex.Lock()
+// 		s.ConcurrentTask--
+// 		s.Mutex.Unlock()
 
-func (s *Scheduler) Schedule(task *model.Task) (*model.Task, error) {
-	client, err := s.GetClient()
-	if err != nil {
-		return nil, err
-	}
+// 		task.IsBusy = false
+// 		if task.State != model.Task_STATE_COMPLETED && task.State != model.Task_STATE_CANCELED && task.State != model.Task_STATE_FAULTED {
+// 			if task.FailureCount >= s.TaskDelegate.TaskMaxFailureCount || task.ScheduleCount >= s.TaskDelegate.TaskMaxSchduleCount {
+// 				task.State = model.Task_STATE_FAULTED
+// 			}
+// 		}
 
-	u, err := uuid.NewRandom()
-	if err != nil {
-		return nil, err
-	}
-	requestId := u.String()
+// 		_, _ = s.UpdateTask(task)
+// 		grpclog.Infof(
+// 			"scheduler %d task %d update state %d schedule %d/%d failure %d/%d",
+// 			s.TaskDelegate.Type,
+// 			task.TaskId, task.State, task.ScheduleCount, s.TaskDelegate.TaskMaxSchduleCount, task.FailureCount, s.TaskDelegate.TaskMaxFailureCount,
+// 		)
+// 	}()
 
-	grpclog.Infof("scheduler %d task %d start request id %s", s.TaskDelegate.Type, task.TaskId, requestId)
+// 	if task.State == model.Task_STATE_CREATED {
+// 		ctx, cancel := context.WithTimeout(ctx, TaskPrepareTimeout)
+// 		defer cancel()
 
-	ctx := context.Background()
-	if task.UserInfo != nil {
-		creatorCtx, err := commonauth.NewOutgoingContext(task.UserInfo)
-		if err != nil {
-			return nil, err
-		}
-		ctx = metadata.AppendToOutgoingContext(creatorCtx, "x-request-id", requestId)
-	}
+// 		processTaskResponse, err := client.PrepareTask(ctx, &asynctaskapi.PrepareTaskRequest{
+// 			Task: task,
+// 		})
+// 		if err != nil {
+// 			grpclog.Infof("scheduler %d task %d error: %s", s.TaskDelegate.Type, task.TaskId, err)
+// 			task.FailureCount++
+// 			task.NextScheduleTime = task.LastScheduleTime + uint64(TaskFailureInterval/time.Millisecond)
+// 			return nil, err
+// 		}
 
-	defer func() {
-		s.Mutex.Lock()
-		s.ConcurrentTask--
-		s.Mutex.Unlock()
+// 		if processTaskResponse.TaskState != task.State && processTaskResponse.TaskState != model.Task_STATE_UNSPECIFIED {
+// 			task.State = processTaskResponse.TaskState
+// 		} else {
+// 			task.State = model.Task_STATE_READY
+// 		}
+// 		if processTaskResponse.TaskData != nil {
+// 			taskData := processTaskResponse.TaskData
+// 			taskData.TaskDataId = task.TaskId
+// 			_, _ = s.UpdateTaskData(taskData)
+// 		}
 
-		task.IsBusy = false
-		if task.State != model.Task_STATE_COMPLETED && task.State != model.Task_STATE_CANCELED && task.State != model.Task_STATE_FAULTED {
-			if task.FailureCount >= s.TaskDelegate.TaskMaxFailureCount || task.ScheduleCount >= s.TaskDelegate.TaskMaxSchduleCount {
-				task.State = model.Task_STATE_FAULTED
-			}
-		}
+// 	} else if task.State == model.Task_STATE_READY || task.State == model.Task_STATE_RUNNING {
+// 		ctx, cancel := context.WithTimeout(ctx, TaskExecuteTimeout)
+// 		defer cancel()
 
-		_, _ = s.UpdateTask(task)
-		grpclog.Infof(
-			"scheduler %d task %d update state %d schedule %d/%d failure %d/%d",
-			s.TaskDelegate.Type,
-			task.TaskId, task.State, task.ScheduleCount, s.TaskDelegate.TaskMaxSchduleCount, task.FailureCount, s.TaskDelegate.TaskMaxFailureCount,
-		)
-	}()
+// 		taskData, err := s.GetTaskData(task.TaskId)
+// 		if err != nil {
+// 			grpclog.Infof("scheduler %d task %d error: %s", s.TaskDelegate.Type, task.TaskId, err)
+// 			return nil, err
+// 		}
 
-	if task.State == model.Task_STATE_CREATED {
-		ctx, cancel := context.WithTimeout(ctx, TaskPrepareTimeout)
-		defer cancel()
+// 		executeTaskResponse, err := client.ExecuteTask(ctx, &asynctaskapi.ExecuteTaskRequest{
+// 			Task:     task,
+// 			TaskData: taskData,
+// 		})
+// 		if err != nil {
+// 			grpclog.Infof("scheduler %d task %d error: %s", s.TaskDelegate.Type, task.TaskId, err)
+// 			task.FailureCount++
+// 			task.NextScheduleTime = task.LastScheduleTime + uint64(TaskFailureInterval/time.Millisecond)
+// 			return nil, err
+// 		}
 
-		processTaskResponse, err := client.PrepareTask(ctx, &asynctaskapi.PrepareTaskRequest{
-			Task: task,
-		})
-		if err != nil {
-			grpclog.Infof("scheduler %d task %d error: %s", s.TaskDelegate.Type, task.TaskId, err)
-			task.FailureCount++
-			task.NextScheduleTime = task.LastScheduleTime + uint64(TaskFailureInterval/time.Millisecond)
-			return nil, err
-		}
+// 		if executeTaskResponse.TaskState != task.State && executeTaskResponse.TaskState != model.Task_STATE_UNSPECIFIED {
+// 			task.State = executeTaskResponse.TaskState
+// 		}
+// 		if executeTaskResponse.TaskData != nil {
+// 			taskData := executeTaskResponse.TaskData
+// 			taskData.TaskDataId = task.TaskId
+// 			_, _ = s.UpdateTaskData(taskData)
+// 		}
+// 	}
 
-		if processTaskResponse.TaskState != task.State && processTaskResponse.TaskState != model.Task_STATE_UNSPECIFIED {
-			task.State = processTaskResponse.TaskState
-		} else {
-			task.State = model.Task_STATE_READY
-		}
-		if processTaskResponse.TaskData != nil {
-			taskData := processTaskResponse.TaskData
-			taskData.TaskDataId = task.TaskId
-			_, _ = s.UpdateTaskData(taskData)
-		}
+// 	return task, nil
+// }
 
-	} else if task.State == model.Task_STATE_READY || task.State == model.Task_STATE_RUNNING {
-		ctx, cancel := context.WithTimeout(ctx, TaskExecuteTimeout)
-		defer cancel()
+// func (s *Scheduler) GetNextTasks() ([]*model.Task, error) {
+// 	err := s.DistributedMutex.Lock()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer func() {
+// 		_ = s.DistributedMutex.Unlock()
+// 	}()
+// 	amount := s.TaskDelegate.MaxConcurrentTask - s.ConcurrentTask
+// 	if amount == 0 {
+// 		return nil, nil
+// 	}
 
-		taskData, err := s.GetTaskData(task.TaskId)
-		if err != nil {
-			grpclog.Infof("scheduler %d task %d error: %s", s.TaskDelegate.Type, task.TaskId, err)
-			return nil, err
-		}
+// 	var tasks []*model.Task
+// 	err = s.Impl.DB.Transaction(func(tx *gorm.DB) error {
+// 		now := commonutil.UnixMilliNow()
+// 		result := tx.Where(
+// 			fmt.Sprintf("type = ? AND state IN ? AND is_busy = false AND next_schedule_time < ? AND singleton_id not in (SELECT singleton_id FROM %s WHERE type = %d AND is_busy = true)", GetTaskTable(), s.TaskDelegate.Type),
+// 			s.TaskDelegate.Type,
+// 			[]int32{
+// 				int32(model.Task_STATE_CREATED),
+// 				int32(model.Task_STATE_READY),
+// 				int32(model.Task_STATE_RUNNING),
+// 			},
+// 			now,
+// 		).Order("priority").Order("last_schedule_time").Limit(int(amount)).Find(&tasks)
+// 		if result.Error != nil {
+// 			return result.Error
+// 		}
 
-		executeTaskResponse, err := client.ExecuteTask(ctx, &asynctaskapi.ExecuteTaskRequest{
-			Task:     task,
-			TaskData: taskData,
-		})
-		if err != nil {
-			grpclog.Infof("scheduler %d task %d error: %s", s.TaskDelegate.Type, task.TaskId, err)
-			task.FailureCount++
-			task.NextScheduleTime = task.LastScheduleTime + uint64(TaskFailureInterval/time.Millisecond)
-			return nil, err
-		}
+// 		now = commonutil.UnixMilliNow()
+// 		for _, task := range tasks {
+// 			task.IsBusy = true
+// 			task.ScheduleCount++
+// 			task.LastScheduleTime = now
+// 			result := tx.Save(task)
+// 			if result.Error != nil {
+// 				return result.Error
+// 			}
+// 		}
+// 		return nil
+// 	})
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-		if executeTaskResponse.TaskState != task.State && executeTaskResponse.TaskState != model.Task_STATE_UNSPECIFIED {
-			task.State = executeTaskResponse.TaskState
-		}
-		if executeTaskResponse.TaskData != nil {
-			taskData := executeTaskResponse.TaskData
-			taskData.TaskDataId = task.TaskId
-			_, _ = s.UpdateTaskData(taskData)
-		}
-	}
+// 	s.ConcurrentTask += uint32(len(tasks))
 
-	return task, nil
-}
+// 	return tasks, nil
+// }
 
-func (s *Scheduler) GetNextTasks() ([]*model.Task, error) {
-	err := s.DistributedMutex.Lock()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = s.DistributedMutex.Unlock()
-	}()
-	amount := s.TaskDelegate.MaxConcurrentTask - s.ConcurrentTask
-	if amount == 0 {
-		return nil, nil
-	}
+// func (s *Scheduler) UpdateTask(task *model.Task) (*model.Task, error) {
+// 	handler := s.Impl.DB
 
-	var tasks []*model.Task
-	err = s.Impl.DB.Transaction(func(tx *gorm.DB) error {
-		now := commonutil.UnixMilliNow()
-		result := tx.Where(
-			fmt.Sprintf("type = ? AND state IN ? AND is_busy = false AND next_schedule_time < ? AND singleton_id not in (SELECT singleton_id FROM %s WHERE type = %d AND is_busy = true)", GetTaskTable(), s.TaskDelegate.Type),
-			s.TaskDelegate.Type,
-			[]int32{
-				int32(model.Task_STATE_CREATED),
-				int32(model.Task_STATE_READY),
-				int32(model.Task_STATE_RUNNING),
-			},
-			now,
-		).Order("priority").Order("last_schedule_time").Limit(int(amount)).Find(&tasks)
-		if result.Error != nil {
-			return result.Error
-		}
+// 	result := handler.Save(task)
+// 	if result.Error != nil {
+// 		return nil, result.Error
+// 	}
 
-		now = commonutil.UnixMilliNow()
-		for _, task := range tasks {
-			task.IsBusy = true
-			task.ScheduleCount++
-			task.LastScheduleTime = now
-			result := tx.Save(task)
-			if result.Error != nil {
-				return result.Error
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
+// 	return task, nil
+// }
 
-	s.ConcurrentTask += uint32(len(tasks))
+// func (s *Scheduler) GetTaskData(taskId uint64) (*model.TaskData, error) {
+// 	handler := s.Impl.DB
 
-	return tasks, nil
-}
+// 	taskData := &model.TaskData{}
 
-func (s *Scheduler) UpdateTask(task *model.Task) (*model.Task, error) {
-	handler := s.Impl.DB
+// 	result := handler.First(taskData, taskId)
+// 	if result.Error != nil {
+// 		return nil, result.Error
+// 	}
 
-	result := handler.Save(task)
-	if result.Error != nil {
-		return nil, result.Error
-	}
+// 	return taskData, nil
+// }
 
-	return task, nil
-}
+// func (s *Scheduler) UpdateTaskData(taskData *model.TaskData) (*model.TaskData, error) {
+// 	handler := s.Impl.DB
 
-func (s *Scheduler) GetTaskData(taskId uint64) (*model.TaskData, error) {
-	handler := s.Impl.DB
+// 	result := handler.Save(taskData)
+// 	if result.Error != nil {
+// 		return nil, result.Error
+// 	}
 
-	taskData := &model.TaskData{}
-
-	result := handler.First(taskData, taskId)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	return taskData, nil
-}
-
-func (s *Scheduler) UpdateTaskData(taskData *model.TaskData) (*model.TaskData, error) {
-	handler := s.Impl.DB
-
-	result := handler.Save(taskData)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	return taskData, nil
-}
+// 	return taskData, nil
+// }
