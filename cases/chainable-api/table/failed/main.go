@@ -8,7 +8,7 @@ import (
 func main() {
 	db := v2.Conn()
 	db = db.Table("t_task_998")
-	var task *model.Task
+	var task model.Task
 	db.First(&task)
 	db.First(&task, "id1 = ?", 1)
 }
