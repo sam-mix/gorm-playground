@@ -128,3 +128,11 @@ save:
 .PHONY:save-ok
 save-ok:
 	@cd cases/save/ok && go run main.go
+
+.PHONY:chainable-api
+chainable-api:
+	@cd cases/chainable-api/table/failed && go run main.go
+
+.PHONY:chainable-api-ok
+chainable-api-ok:
+	@cd cases/chainable-api/table/success && go run main.go
