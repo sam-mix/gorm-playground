@@ -136,3 +136,8 @@ chainable-api:
 .PHONY:chainable-api-ok
 chainable-api-ok:
 	@cd cases/chainable-api/table/success && go run main.go
+
+
+.PHONY:in
+in:
+	@cd cases/in && go run main.go
