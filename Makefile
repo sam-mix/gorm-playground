@@ -125,6 +125,10 @@ decimal001:
 save:
 	@cd cases/save && go run main.go
 
+.PHONY:save-v1
+save-v1:
+	@cd cases/save/v1 && go run main.go
+
 .PHONY:save-ok
 save-ok:
 	@cd cases/save/ok && go run main.go
