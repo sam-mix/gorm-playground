@@ -145,3 +145,11 @@ chainable-api-ok:
 .PHONY:in
 in:
 	@cd cases/in && go run main.go
+
+
+.PHONY:pk
+pk:
+	@echo ========================== v1 版本测试 ==========================
+	@cd cases/pk/v1 && go run main.go
+	@echo ========================== v2 版本测试 ==========================
+	@cd cases/pk/v2 && go run main.go
