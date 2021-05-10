@@ -49,3 +49,55 @@ curl -d '{"more":false}' "https://env-feature-sales-data.x.k8s.guanmai.cn/ceres/
  "customer_user_password": "123456"
 }
 
+
+分支: optimize/gorm_v2
+namespace: env-optimize-gorm-v2 
+
+curl -d '{"more":false}' "https://env-optimize-gorm-v2.x.k8s.guanmai.cn/ceres/initialization/InitializationService/InitializeTestingGroup"
+
+
+kubectl get service -n env-optimize-gorm-v2 
+
+
+
+curl -d '{"more":false}' "https://env-hotfix-aftersale.x.k8s.guanmai.cn/ceres/initialization/InitializationService/InitializeTestingGroup"
+
+{
+ "group_id": "346179071408865304",
+ "admin_group_user_username": "admin",
+ "admin_group_user_phone": "12312341234",
+ "admin_group_user_password": "123456",
+ "driver_group_user_username": "driver",
+ "driver_group_user_password": "123456",
+ "purchase1_group_user_username": "purchaser1",
+ "purchase1_group_user_password": "123456",
+ "purchase2_group_user_username": "purchaser2",
+ "purchase2_group_user_password": "123456",
+ "customer_user_username": "customer_user1",
+ "customer_user_phone": "12312341001",
+ "customer_user_password": "123456"
+}
+
+
+curl -d '{"more":false}' "https://env-optimize-gorm-v2.x.k8s.guanmai.cn/ceres/initialization/InitializationService/InitializeTestingGroup"
+{
+ "group_id": "354155366658867224",
+ "admin_group_user_username": "admin",
+ "admin_group_user_phone": "12312341234",
+ "admin_group_user_password": "123456",
+ "driver_group_user_username": "driver",
+ "driver_group_user_password": "123456",
+ "purchase1_group_user_username": "purchaser1",
+ "purchase1_group_user_password": "123456",
+ "purchase2_group_user_username": "purchaser2",
+ "purchase2_group_user_password": "123456",
+ "customer_user_username": "customer_user1",
+ "customer_user_phone": "12312341001",
+ "customer_user_password": "123456"
+}
+
+
+kubectl get po -n env-optimize-gorm-v2 | grep -v R
+
+
+
