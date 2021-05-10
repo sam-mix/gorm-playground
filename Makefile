@@ -153,3 +153,7 @@ pk:
 	@cd cases/pk/v1 && go run main.go
 	@echo ========================== v2 版本测试 ==========================
 	@cd cases/pk/v2 && go run main.go
+
+.PHONY:tl
+tl:
+	@cd cases/tx-lock && go run main.go
