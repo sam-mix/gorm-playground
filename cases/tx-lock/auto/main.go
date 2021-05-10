@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"playground/cases/model"
-	"playground/cases/util"
 	v2 "playground/cases/util/v2/conn"
 	"sync"
 	"time"
@@ -24,7 +24,7 @@ func main() {
 	for j := 1; j <= 10; j++ {
 		w.Add(1)
 		go func(db *gorm.DB, x int) {
-			if err := util.NewDB(db).Transaction(func(tx *gorm.DB) error {
+			if err := db.Transaction(func(tx *gorm.DB) error {
 				defer func() {
 					i++
 					w.Done()
@@ -40,8 +40,11 @@ func main() {
 					}
 				}
 				if oldVersion.Version != i {
+					log.Fatalf("gt: %d, err, old: %v, cur: %v \n", x, oldVersion.Version, i)
+					log.Printf("gt: %d, err, old: %v, cur: %v \n", x, oldVersion.Version, i)
 					fmt.Printf("gt: %d, err, old: %v, cur: %v \n", x, oldVersion.Version, i)
 				} else {
+					log.Printf("gt: %d, ok\n", x)
 					fmt.Printf("gt: %d, ok\n", x)
 				}
 				oldVersion.Version = i
