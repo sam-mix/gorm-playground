@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"playground/cases/model"
+	"playground/cases/util"
 	v2 "playground/cases/util/v2/conn"
 	"sync"
 	"time"
@@ -18,11 +19,11 @@ func main() {
 	var w sync.WaitGroup
 	defer w.Wait()
 	i := uint(1)
-	globalDB.Exec("DROP TABLE IF EXIST t_user_888;")
+	globalDB.Exec("DROP TABLE IF EXIST t_user_888")
 	for j := 1; j <= 10; j++ {
 		w.Add(1)
 		go func(db *gorm.DB, x int) {
-			tx := db.Begin()
+			tx := util.NewDB(db).Begin()
 			defer func() {
 				tx.Rollback()
 				i++
@@ -33,9 +34,12 @@ func main() {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					oldVersion.ID = id
 					oldVersion.Version = i
+					if err := tx.Table("t_user_888").Save(oldVersion).Error; err != nil {
+						fmt.Println(err)
+					}
 					return
 				} else {
-					panic(err)
+					fmt.Println(err)
 				}
 			}
 			if oldVersion.Version != i {
@@ -44,8 +48,9 @@ func main() {
 				fmt.Printf("gt: %d, ok\n", x)
 			}
 			oldVersion.Version = i
-			tx.Table("t_user_888").Save(oldVersion)
-
+			if err := tx.Table("t_user_888").Save(oldVersion).Error; err != nil {
+				fmt.Println(err)
+			}
 			time.Sleep(50 * time.Microsecond)
 
 		}(globalDB, j)

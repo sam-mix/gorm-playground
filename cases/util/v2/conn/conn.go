@@ -17,10 +17,10 @@ func Conn() *gorm.DB {
 	zapLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
 		logger.Config{
-			SlowThreshold:             time.Second, // Slow SQL threshold
-			LogLevel:                  logger.Info, // Log level
-			IgnoreRecordNotFoundError: true,        // Ignore ErrRecordNotFound error for logger
-			Colorful:                  true,        // Disable color
+			SlowThreshold:             time.Second,   // Slow SQL threshold
+			LogLevel:                  logger.Silent, // Log level
+			IgnoreRecordNotFoundError: true,          // Ignore ErrRecordNotFound error for logger
+			Colorful:                  true,          // Disable color
 		},
 	)
 	db, err := gorm.Open(mysql.New(mysql.Config{
@@ -36,7 +36,6 @@ func Conn() *gorm.DB {
 	if err != nil {
 		panic(err)
 	}
-	db = db.Debug()
 	db.Callback().Query().Before("gorm:query").Register("gorm:auto_migrate", migrate)
 	db.Callback().Update().Before("gorm:update").Register("gorm:auto_migrate", migrate)
 	db.Callback().Create().Before("gorm:create").Register("gorm:auto_migrate", migrate)
