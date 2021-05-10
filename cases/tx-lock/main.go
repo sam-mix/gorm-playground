@@ -21,7 +21,7 @@ func main() {
 	globalDB.Exec("DROP TABLE IF EXIST t_user_888;")
 	for j := 1; j <= 10; j++ {
 		w.Add(1)
-		go func(db *gorm.DB) {
+		go func(db *gorm.DB, x int) {
 			tx := db.Begin()
 			defer func() {
 				tx.Rollback()
@@ -39,16 +39,16 @@ func main() {
 				}
 			}
 			if oldVersion.Version != i {
-				fmt.Printf("gt: %d, err, old: %v, cur: %v \n", j, oldVersion.Version, i)
+				fmt.Printf("gt: %d, err, old: %v, cur: %v \n", x, oldVersion.Version, i)
 			} else {
-				fmt.Printf("gt: %d, ok\n", j)
+				fmt.Printf("gt: %d, ok\n", x)
 			}
 			oldVersion.Version = i
 			tx.Table("t_user_888").Save(oldVersion)
 
 			time.Sleep(50 * time.Microsecond)
 
-		}(globalDB)
+		}(globalDB, j)
 	}
 
 }
