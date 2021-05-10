@@ -34,7 +34,7 @@ func main() {
 					if errors.Is(err, gorm.ErrRecordNotFound) {
 						oldVersion.ID = id
 						oldVersion.Version = i
-						return nil
+						return tx.Table(tableName).Error
 					} else {
 						return err
 					}
