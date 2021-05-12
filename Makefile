@@ -160,7 +160,12 @@ tl:
 	@cd cases/tx-lock/auto && go run main.go
 	@echo ========================== man ==========================
 	@cd cases/tx-lock/man && go run main.go
-	
+
+
+.PHONY:raw_sql
+raw_sql:
+	@cd cases/raw_sql && go run main.go
+
 
 
 	
