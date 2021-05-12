@@ -20,7 +20,8 @@ func main() {
 	defer w.Wait()
 	i := uint(1)
 	tableName := "t_user_888"
-	globalDB.Exec(fmt.Sprintf("DROP TABLE IF EXIST %s", tableName))
+	globalDB.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName))
+	time.Sleep(time.Second)
 	for j := 1; j <= 10; j++ {
 		w.Add(1)
 		go func(db *gorm.DB, x int) {
