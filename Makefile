@@ -166,6 +166,10 @@ tl:
 raw_sql:
 	@cd cases/raw_sql && go run main.go
 
+.PHONY:loop-save
+loop-save:
+	@cd cases/loop-save && go run main.go
+
 
 
 	

@@ -9,6 +9,7 @@ import (
 type Bee struct {
 	gorm.Model
 	DukeColor Color
+	X         int
 }
 
 type BeeV1 struct {
