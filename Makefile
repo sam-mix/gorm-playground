@@ -171,5 +171,10 @@ loop-save:
 	@cd cases/loop-save && go run main.go
 
 
-
+.PHONY:pna-save
+pna-save:
+	@echo ========================== v1 ========================== 
+	@cd cases/pna-save/v1 && go run main.go
+	@echo ========================== v2 ==========================
+	@cd cases/pna-save/v2 && go run main.go
 	
