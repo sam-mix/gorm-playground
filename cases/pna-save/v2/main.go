@@ -7,5 +7,5 @@ import (
 
 func main() {
 	db := v2.Conn()
-	db.Table("t_pna_v2").Save(&model.PNA{PnaID: 1})
+	db.Table("t_pna_v2").Save(&model.PNA{PnaID: 2})
 }

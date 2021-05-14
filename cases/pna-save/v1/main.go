@@ -8,6 +8,6 @@ import (
 func main() {
 	db := v1.Conn()
 
-	db.Table("t_pna_v1").Save(&model.PNAv1{PnaID: 1})
+	db.Table("t_pna_v1").Save(&model.PNAv1{PnaID: 2})
 
 }
