@@ -10,6 +10,13 @@ message Person {
 }
 
 message Dog {
+
+  enum Color {
+    xxx = 0;
+    xx = 1;
+    x = 2;
+  }
+
   message Ms {
     repeated string ms = 1; 
   }
@@ -18,4 +25,5 @@ message Dog {
   uint64 id = 1;
   string name = 2;
   Ms ms =3;
+  Color color = 4;
 }

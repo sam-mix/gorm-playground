@@ -182,4 +182,7 @@ pna-save:
 color:
 	@cd cases/color && go run main.go
 
-	
+.PHONY:proto-color
+proto-color:
+	@cd cases/proto-color && go run main.go
+
