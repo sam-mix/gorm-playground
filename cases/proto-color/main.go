@@ -22,6 +22,6 @@ func main() {
 	})
 
 	var cs []*proto.Dog
-	db.Table("t_proto_color_test").Where("color = ?", proto.Dog_x).Find(&cs)
+	db.Table("t_proto_color_test").Where("color = ?", proto.Dog_xxx).Find(&cs)
 	fmt.Println(len(cs))
 }
